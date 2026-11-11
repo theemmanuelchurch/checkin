@@ -21,10 +21,7 @@
       padding: 24px 16px;
     }
 
-    .card {
-      width: 100%;
-      max-width: 420px;
-    }
+    .card { width: 100%; max-width: 420px; }
 
     h1 {
       font-weight: 700;
@@ -33,11 +30,7 @@
       margin-bottom: 8px;
     }
 
-    .date {
-      font-size: 0.95rem;
-      opacity: 0.7;
-      margin-bottom: 32px;
-    }
+    .date { font-size: 0.95rem; opacity: 0.7; margin-bottom: 32px; }
 
     label {
       display: block;
@@ -64,6 +57,11 @@
     input:focus { border-width: 2px; padding: 13px 15px; }
     input::placeholder { color: rgba(255,255,255,0.4); }
 
+    /* Honeypot: hidden from people, visible to bots */
+    .hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+
+    #turnstile { margin-bottom: 12px; }
+
     button {
       width: 100%;
       background: #fff;
@@ -80,13 +78,9 @@
     }
 
     button:hover { opacity: 0.85; }
+    button:disabled { opacity: 0.5; cursor: default; }
 
-    .confirm {
-      margin-top: 24px;
-      text-align: center;
-      font-weight: 600;
-      min-height: 1.5em;
-    }
+    .confirm { margin-top: 24px; text-align: center; font-weight: 600; min-height: 1.5em; }
   </style>
 </head>
 <body>
@@ -94,57 +88,85 @@
     <h1>Check In</h1>
     <p class="date" id="dateDisplay"></p>
 
-    <form id="checkinForm">
-      <input type="hidden" id="date" name="date">
-
+    <form id="checkinForm" novalidate>
       <label for="name">Name</label>
-      <input type="text" id="name" name="name" placeholder="Your name" required>
+      <input type="text" id="name" name="name" placeholder="Your name" maxlength="100" autocomplete="name" required>
 
       <label for="email">Email</label>
-      <input type="email" id="email" name="email" placeholder="you@example.com" required>
+      <input type="email" id="email" name="email" placeholder="you@example.com" maxlength="254" autocomplete="email" required>
+
+      <div class="hp" aria-hidden="true">
+        <label for="website">Website</label>
+        <input type="text" id="website" name="website" tabindex="-1" autocomplete="off">
+      </div>
+
+      <div id="turnstile"></div>
 
       <button type="submit">I'm here</button>
     </form>
 
-    <p class="confirm" id="confirm"></p>
+    <p class="confirm" id="confirm" role="status"></p>
   </main>
 
   <script>
-    // Paste your Google Apps Script web app URL here
-    const SCRIPT_URL = 'https://script.google.com/a/macros/theemmanuelchurch.com/s/AKfycbxTELIKS155WmHF2YXy2Cnz4RUssg127c7dHDM1xVkXa4Ax1Q6FVf6PsKXof5jmH596/exec';
+    // Your Cloudflare Worker URL (safe to be public)
+    const WORKER_URL = 'PASTE_YOUR_WORKER_URL_HERE';
+    // Optional: Cloudflare Turnstile site key. Leave blank to skip the CAPTCHA.
+    const TURNSTILE_SITE_KEY = '';
 
-    const now = new Date();
-    document.getElementById('dateDisplay').textContent = now.toLocaleDateString('en-US', {
+    document.getElementById('dateDisplay').textContent = new Date().toLocaleDateString('en-US', {
       weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
     });
-    document.getElementById('date').value = now.toISOString().slice(0, 10);
+
+    let turnstileId = null;
+    if (TURNSTILE_SITE_KEY) {
+      window.onTurnstileLoad = () => {
+        turnstileId = turnstile.render('#turnstile', { sitekey: TURNSTILE_SITE_KEY, theme: 'dark' });
+      };
+      const s = document.createElement('script');
+      s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?onload=onTurnstileLoad&render=explicit';
+      s.async = true;
+      document.head.appendChild(s);
+    }
 
     const form = document.getElementById('checkinForm');
     const button = form.querySelector('button');
     const confirmEl = document.getElementById('confirm');
 
-    form.addEventListener('submit', async function (e) {
+    form.addEventListener('submit', async (e) => {
       e.preventDefault();
+      if (!form.reportValidity()) return;
+
       const name = document.getElementById('name').value.trim();
-      const email = document.getElementById('email').value.trim();
-      const stamp = new Date();
-      const date = stamp.toLocaleDateString('en-US');
-      const time = stamp.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+      const payload = {
+        name,
+        email: document.getElementById('email').value.trim(),
+        website: document.getElementById('website').value,
+        turnstileToken: turnstileId !== null ? turnstile.getResponse(turnstileId) : ''
+      };
 
       button.disabled = true;
       button.textContent = 'Checking in…';
+      confirmEl.textContent = '';
 
       try {
-        await fetch(SCRIPT_URL, {
+        const res = await fetch(WORKER_URL, {
           method: 'POST',
-          mode: 'no-cors',
-          body: new URLSearchParams({ name, email, date, time })
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
         });
-        confirmEl.textContent = `Thanks, ${name}! Checked in at ${time}.`;
-        form.reset();
-      } catch (err) {
+        const out = await res.json();
+        if (out.ok) {
+          const time = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+          confirmEl.textContent = `Thanks, ${name}! Checked in at ${time}.`;
+          form.reset();
+        } else {
+          confirmEl.textContent = out.error || 'Something went wrong. Please try again.';
+        }
+      } catch {
         confirmEl.textContent = 'Something went wrong. Please try again.';
       } finally {
+        if (turnstileId !== null) turnstile.reset(turnstileId);
         button.disabled = false;
         button.textContent = "I'm here";
       }
