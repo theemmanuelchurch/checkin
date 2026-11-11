@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Check In</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #000;
+      color: #fff;
+      font-family: 'Montserrat', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 16px;
+    }
+
+    .card {
+      width: 100%;
+      max-width: 420px;
+    }
+
+    h1 {
+      font-weight: 700;
+      font-size: 2rem;
+      letter-spacing: 0.02em;
+      margin-bottom: 8px;
+    }
+
+    .date {
+      font-size: 0.95rem;
+      opacity: 0.7;
+      margin-bottom: 32px;
+    }
+
+    label {
+      display: block;
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 8px;
+    }
+
+    input {
+      width: 100%;
+      background: transparent;
+      border: 1px solid #fff;
+      border-radius: 6px;
+      color: #fff;
+      font-family: inherit;
+      font-size: 1rem;
+      padding: 14px 16px;
+      margin-bottom: 20px;
+      outline: none;
+    }
+
+    input:focus { border-width: 2px; padding: 13px 15px; }
+    input::placeholder { color: rgba(255,255,255,0.4); }
+
+    button {
+      width: 100%;
+      background: #fff;
+      color: #000;
+      border: none;
+      border-radius: 6px;
+      font-family: inherit;
+      font-size: 1.1rem;
+      font-weight: 700;
+      padding: 16px;
+      cursor: pointer;
+      margin-top: 8px;
+      transition: opacity 0.2s;
+    }
+
+    button:hover { opacity: 0.85; }
+
+    .confirm {
+      margin-top: 24px;
+      text-align: center;
+      font-weight: 600;
+      min-height: 1.5em;
+    }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <h1>Check In</h1>
+    <p class="date" id="dateDisplay"></p>
+
+    <form id="checkinForm">
+      <input type="hidden" id="date" name="date">
+
+      <label for="name">Name</label>
+      <input type="text" id="name" name="name" placeholder="Your name" required>
+
+      <label for="email">Email</label>
+      <input type="email" id="email" name="email" placeholder="you@example.com" required>
+
+      <button type="submit">I'm here</button>
+    </form>
+
+    <p class="confirm" id="confirm"></p>
+  </main>
+
+  <script>
+    // Paste your Google Apps Script web app URL here
+    const SCRIPT_URL = 'https://script.google.com/a/macros/theemmanuelchurch.com/s/AKfycbxTELIKS155WmHF2YXy2Cnz4RUssg127c7dHDM1xVkXa4Ax1Q6FVf6PsKXof5jmH596/exec';
+
+    const now = new Date();
+    document.getElementById('dateDisplay').textContent = now.toLocaleDateString('en-US', {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+    });
+    document.getElementById('date').value = now.toISOString().slice(0, 10);
+
+    const form = document.getElementById('checkinForm');
+    const button = form.querySelector('button');
+    const confirmEl = document.getElementById('confirm');
+
+    form.addEventListener('submit', async function (e) {
+      e.preventDefault();
+      const name = document.getElementById('name').value.trim();
+      const email = document.getElementById('email').value.trim();
+      const stamp = new Date();
+      const date = stamp.toLocaleDateString('en-US');
+      const time = stamp.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+
+      button.disabled = true;
+      button.textContent = 'Checking in…';
+
+      try {
+        await fetch(SCRIPT_URL, {
+          method: 'POST',
+          mode: 'no-cors',
+          body: new URLSearchParams({ name, email, date, time })
+        });
+        confirmEl.textContent = `Thanks, ${name}! Checked in at ${time}.`;
+        form.reset();
+      } catch (err) {
+        confirmEl.textContent = 'Something went wrong. Please try again.';
+      } finally {
+        button.disabled = false;
+        button.textContent = "I'm here";
+      }
+    });
+  </script>
+</body>
+</html>
